@@ -1,0 +1,100 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+
+import sys
+import os.path
+import argparse
+import logging
+import bareos.bsock
+
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
+
+dir_conf  = '/etc/bareos/bareos-dir.d/'
+file_conf = 'bareos-scripts.conf'
+
+def get_job_names(director):
+    result = director.call('.jobs')['jobs']
+    jobs   = [ job['name'] for job in result ]
+    return jobs
+
+def get_connected_clients(director):
+    result  = director.call('status director')['client-connection']
+    clients = [ client['name'] for client in result ]
+    return clients
+
+def trigger(director, jobnames, clients, hours_cycle):
+    for client in clients:
+        jobname = 'backup-{}'.format(client)
+        if not jobname in jobnames:
+            print('{} skipped, no matching job ({}) found'.format(client, jobname))
+        else:
+            jobs = director.call('list jobs client={0} hours={1}'.format(client, hours_cycle))['jobs']
+            if jobs:
+                job     = director.call('list jobs client={0} hours={1} last'.format(client, hours_cycle))['jobs'][0]
+                jobinfo = '{starttime}: jobid={jobid}, level={level}, status={jobstatus}'.format(**job)
+                print('{}: skipped, recent backups available ({})'.format(jobname, jobinfo))
+            else:
+                # TODO: check type=backup and failed
+                jobid = director.call('run {} yes'.format(jobname))['run']['jobid']
+                print('{}: backup triggered, jobid={}'.format(jobname, jobid))
+
+def getArguments():
+    parser = argparse.ArgumentParser(description='Python script to replace the standard RunOnIncomingConnectInterval mechanism for performing backups for laptops, etc. (the devices is not constantly working)')
+    parser.add_argument('--debug',  action='store_true', help="enable debugging output")
+    parser.add_argument('--dirname', dest="dirname", default="bareos-dir", help="Bareos Director name (default bareos-dir)")
+    args = parser.parse_args()
+    return args
+
+if os.path.exists(dir_conf) == False:
+   sys.exit("Directory not found: " + dir_conf)
+
+if os.path.isfile(dir_conf + file_conf) == False:
+   sys.exit("Configuration file does not exist: " + dir_conf + file_conf)
+
+if __name__ == '__main__':
+    logging.basicConfig(format='%(levelname)s %(module)s.%(funcName)s: %(message)s', level = logging.INFO)
+    logger    = logging.getLogger()
+    args      = getArguments()
+    config    = configparser.ConfigParser()
+    config.read(dir_conf + file_conf)
+    dirname   = args.dirname
+    parameter = {}
+    try:
+       address     = config.get(dirname, 'address')
+       port        = config.get(dirname, 'port')
+       password    = config.get(dirname, 'password')
+       name        = config.get(dirname, 'name')
+       hours_cycle = config.get(dirname, 'hours_cycle')
+       enable      = config.get(dirname, 'enable')
+    except Exception as e :
+       print('The following issue was found in the config file: ' + str(e))
+       sys.exit(1)
+    if str(enable) == "False":
+       print("Director " + dirname + " has state = False")
+       sys.exit(0)
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+    try:
+        parameter['dirname']     = dirname
+        parameter['name']        = name
+        password = bareos.bsock.Password(password)
+        parameter['password']    = password
+        parameter['address']     = address
+        parameter['port']        = port
+        logger.debug('Options passed to bareos.bsock.DirectorConsoleJson: %s' % (parameter))
+        try:
+           director = bareos.bsock.DirectorConsoleJson(**parameter)
+        except Exception as e :
+           print(str(e))
+           sys.exit(1)
+    except RuntimeError as e:
+        print(str(e))
+        sys.exit(1)
+
+    logger.debug( "authentication successful" )
+    jobs = get_job_names(director)
+    clients = get_connected_clients(director)
+    trigger(director, jobs, clients, hours_cycle)
