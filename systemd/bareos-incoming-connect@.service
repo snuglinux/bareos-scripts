@@ -1,0 +1,14 @@
+[Unit]
+Description=Bareos Incoming Connect for %I
+After=syslog.target network-online.target
+Wants=network-online.target
+Documentation=https://github.com/snuglinux/bareos-scripts/edit/main/README.md
+
+[Service]
+PrivateTmp=true
+ExecStart=/usr/bin/bareos-incoming-connect --dirname="%i"
+User=bareos
+Group=bareos
+
+[Install]
+WantedBy=multi-user.target
