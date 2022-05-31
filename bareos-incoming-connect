@@ -12,7 +12,7 @@ try:
 except ImportError:
     import ConfigParser as configparser
 
-dir_conf  = '/etc/bareos/bareos-dir.d/'
+dir_conf  = '/etc/bareos/'
 file_conf = 'bareos-scripts.conf'
 
 def get_job_names(director):
