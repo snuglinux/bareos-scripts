@@ -13,11 +13,13 @@ configuration file structure:
   hours_cycle - after how many hours to create a job, analogue of RunOnIncomingConnectInterval
 
 The script is started with the command:
-
   systemctl restart bareos-incoming-connect@bareos-dir.timer
 
 bareos-dir - the name of the director to run
 
-You can change the script startup period for yourself in the configuration file bareos-incoming-connect.conf
+By default, the script will be executed every minute, you can change the script startup period for yourself in the configuration file bareos-incoming-connect.conf
+
+To view the list of running timers in the system, you can run:
+  systemctl list-timers
 
 The idea was taken from here: https://trac.dass-it.de/pub/browser/people/joerg.steffens/technical/bareos/triggerjob/triggerjob.py
